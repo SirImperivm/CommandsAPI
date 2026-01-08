@@ -120,3 +120,5 @@ run/
 gradle.properties
 dist/
 libs/
+*.md
+!readme.md
