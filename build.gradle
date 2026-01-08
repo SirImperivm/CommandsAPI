@@ -1,0 +1,90 @@
+plugins {
+    id 'java'
+    id 'com.github.ben-manes.versions' version '0.53.0'
+    id 'com.gradleup.shadow' version '8.3.1'
+}
+
+group = 'me.sirimperivm'
+description = "CommandsAPI"
+
+def versionFile = file("$projectDir/version.txt")
+def distDir = file("$projectDir/dist")
+
+if (!versionFile.exists()) {
+    versionFile.text = "0.0.0"
+}
+
+def currentVersion = versionFile.text.trim()
+def (major, minor, patch) = currentVersion.tokenize('.').collect { it as int }
+
+def incrementPatch = {
+    patch++
+    def newVersion = "${major}.${minor}.${patch}"
+    versionFile.text = newVersion
+    return newVersion
+}
+
+version = currentVersion
+
+tasks.register("incrementVersion") {
+    doLast {
+        def newVersion = incrementPatch()
+        println "✅ Version incremented to: ${newVersion}"
+    }
+}
+
+tasks.register("distribute") {
+    dependsOn tasks.shadowJar
+
+    doLast {
+        distDir.mkdirs()
+
+        def jarFile = tasks.shadowJar.archiveFile.get().asFile
+        def targetFile = new File(distDir, "${project.description}-latest.jar")
+
+        println "📦 JAR File Distributed As: ${targetFile.path}"
+
+        jarFile.withInputStream { is ->
+            targetFile.withOutputStream {os ->
+                os << is
+            }
+        }
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = "papermc-repo"
+        url = "https://repo.papermc.io/repository/maven-public/"
+    }
+    maven { name = 'jitpack.io'; url = 'https://jitpack.io' }
+}
+
+dependencies {
+    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    compileOnly "org.projectlombok:lombok:1.18.42"
+    compileOnly fileTree("./libs")
+    annotationProcessor "org.projectlombok:lombok:1.18.42"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.shadowJar {
+    archiveClassifier.set('')
+    archiveFileName.set("${project.description}-${project.version}.jar")
+
+    exclude('META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA')
+}
+
+tasks.build {
+    dependsOn tasks.distribute
+}
