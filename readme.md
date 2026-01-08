@@ -50,7 +50,7 @@ dependencies {
 </dependencies>
 ```
 
-> **Note:** Replace `<latest-version>` with the actual version number (e.g., `1.0.0`).
+> **Note:** Replace `<latest-version>` with the actual version number (e.g., `0.0.2`).
 
 ---
 
