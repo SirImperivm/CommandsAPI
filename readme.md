@@ -2,7 +2,7 @@
 
 A lightweight and intuitive API library for creating Brigadier-based commands in PaperMC 1.21+ plugins. This library simplifies the command registration process by providing an object-oriented approach with built-in support for subcommands, arguments, permissions, and exception handling.
 
-[![](https://jitpack.io/v/SirImperivm/commandsapi-paper-1.21.svg)](https://jitpack.io/#SirImperivm/commandsapi-paper-1.21)
+[![](https://jitpack.io/v/SirImperivm/commandsapi-paper-1.21.svg)](https://jitpack.io/#SirImperivm/CommandsAPI)
 
 ---
 
