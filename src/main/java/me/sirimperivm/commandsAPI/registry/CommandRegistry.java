@@ -180,12 +180,18 @@ public class CommandRegistry {
      */
     private RequiredArgumentBuilder<CommandSourceStack, ?> createArgumentBuilder(Argument arg) {
         return switch (arg.getType()) {
-            case INTEGER -> RequiredArgumentBuilder.argument(arg.getName(),
-                    IntegerArgumentType.integer((int) arg.getMin(), (int) arg.getMax()));
+            case INTEGER -> {
+                int min = (int) Math.max(arg.getMin(), Integer.MIN_VALUE);
+                int max = (int) Math.min(arg.getMax(), Integer.MAX_VALUE);
+                yield RequiredArgumentBuilder.argument(arg.getName(), IntegerArgumentType.integer(min, max));
+            }
             case LONG -> RequiredArgumentBuilder.argument(arg.getName(),
                     LongArgumentType.longArg(arg.getMin(), arg.getMax()));
-            case DOUBLE -> RequiredArgumentBuilder.argument(arg.getName(),
-                    DoubleArgumentType.doubleArg(arg.getMin(), arg.getMax()));
+            case DOUBLE -> {
+                double min = Math.max(arg.getMin(), -Double.MAX_VALUE);
+                double max = Math.min(arg.getMax(), Double.MAX_VALUE);
+                yield RequiredArgumentBuilder.argument(arg.getName(), DoubleArgumentType.doubleArg(min, max));
+            }
             case BOOLEAN -> RequiredArgumentBuilder.argument(arg.getName(),
                     BoolArgumentType.bool());
             default -> {
