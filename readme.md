@@ -98,7 +98,6 @@ public class MyPlugin extends JavaPlugin {
         CommandRegistry registry = CommandsAPI.createRegistry(this);
 
         registry.register(new HelloCommand());
-        registry.registerAll();
     }
 }
 ```
