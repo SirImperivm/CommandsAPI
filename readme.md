@@ -302,7 +302,7 @@ Throw a `CommandException` anywhere in your command's `run()` method:
     @Override 
     public void run() {
         String playerName = getArgument("player").getAsString();
-        Player target = Bukkit.getPlayer(playerName);
+        Player target = getArgument("player").getAsPlayer();
         if (target == null) {
             throw new CommandException("player.not-found")
                     .with("player", playerName);
