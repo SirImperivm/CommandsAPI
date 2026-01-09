@@ -27,7 +27,6 @@ import java.util.*;
 public abstract class SubCommand {
 
     private final String name, permission, description;
-    private final List<String> aliases;
     private final ExecutorType executorType;
     protected final Map<String, SubCommand> subcommands = new LinkedHashMap<>();
     protected final Map<String, Argument> arguments = new LinkedHashMap<>();
@@ -46,7 +45,7 @@ public abstract class SubCommand {
      *             and must be unique within the context of its parent command.
      */
     protected SubCommand(String name) {
-        this(name, null, null, Collections.emptyList(), ExecutorType.BOTH);
+        this(name, null, null, ExecutorType.BOTH);
     }
 
     /**
@@ -63,7 +62,7 @@ public abstract class SubCommand {
      *                   to restrict access to users with the appropriate permissions.
      */
     protected SubCommand(String name, String permission) {
-        this(name, permission, null, Collections.emptyList(), ExecutorType.BOTH);
+        this(name, permission, null, ExecutorType.BOTH);
     }
 
     /**
@@ -82,20 +81,7 @@ public abstract class SubCommand {
      *                    about the subcommand's purpose or functionality.
      */
     protected SubCommand(String name, String permission, String description) {
-        this(name, permission, description, Collections.emptyList(), ExecutorType.BOTH);
-    }
-
-    /**
-     * Constructs a new SubCommand with the specified name, permission, description, and aliases.
-     *
-     * This constructor initializes a SubCommand with a name, a required permission,
-     * a brief description, and a list of aliases. The executor type defaults to
-     * {@code ExecutorType.BOTH}, allowing the command to be executed by both players and the console.
-     * The aliases list is deep-copied to ensure immutability of the passed list.
-     *
-     * @param name        the name of the subcommand. This name is*/
-    protected SubCommand(String name, String permission, String description, List<String> aliases) {
-        this(name, permission, description, aliases, ExecutorType.BOTH);
+        this(name, permission, description, ExecutorType.BOTH);
     }
 
     /**
@@ -113,18 +99,14 @@ public abstract class SubCommand {
      *                     to restrict access to users with the appropriate permissions.
      * @param description  a brief description of the subcommand. This provides additional
      *                     clarity about the subcommand's purpose or functionality.
-     * @param aliases      a list of alternative names (aliases) for the subcommand. These aliases
-     *                     allow the subcommand to be accessed using other identifiers. If {@code null},
-     *                     the alias list is initialized as an empty list.
      * @param executorType specifies the type of executor allowed to run the subcommand. If {@code null},
      *                     the default value {@code ExecutorType.BOTH} is used, allowing both players
      *                     and the console to execute the subcommand.
      */
-    protected SubCommand(String name, String permission, String description, List<String> aliases, ExecutorType executorType) {
+    protected SubCommand(String name, String permission, String description, ExecutorType executorType) {
         this.name = name;
         this.permission = permission;
         this.description = description;
-        this.aliases = aliases != null ? new ArrayList<>(aliases) : new ArrayList<>();
         this.executorType = executorType != null ? executorType : ExecutorType.BOTH;
     }
 
@@ -213,16 +195,5 @@ public abstract class SubCommand {
      */
     public boolean hasPermission() {
         return permission != null && !permission.isEmpty();
-    }
-
-    /**
-     * Checks if the provided input matches the name or any of the aliases.
-     *
-     * @param input the string to compare against the name and aliases
-     * @return true if the input matches the name or any alias, false otherwise
-     */
-    public boolean matchesName(String input) {
-        if (name.equalsIgnoreCase(input)) return true;
-        return aliases.stream().anyMatch(alias -> alias.equalsIgnoreCase(input));
     }
 }
