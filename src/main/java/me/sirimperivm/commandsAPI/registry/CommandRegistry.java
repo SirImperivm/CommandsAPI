@@ -4,8 +4,6 @@ import com.mojang.brigadier.arguments.*;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
-import com.mojang.brigadier.suggestion.Suggestions;
-import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.brigadier.tree.CommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -24,7 +22,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The CommandRegistry class is responsible for registering and managing commands for a given plugin.
@@ -35,6 +33,17 @@ public class CommandRegistry {
 
     private final Plugin plugin;
     private CommandExceptionHandler exceptionHandler;
+
+    /**
+     * Map of registered commands, keyed by command name (lowercase).
+     * This allows updating commands at runtime.
+     */
+    private final Map<String, CommandEntity> registeredCommands = new ConcurrentHashMap<>();
+
+    /**
+     * Tracks whether the lifecycle event has already been registered.
+     */
+    private boolean lifecycleRegistered = false;
 
     /**
      * Constructs a new {@code CommandRegistry} instance, which is used to manage the
@@ -62,20 +71,73 @@ public class CommandRegistry {
 
     /**
      * Registers a command to the plugin's lifecycle manager, allowing it to be
-     * integrated into the command framework. This method attaches the command to
-     * the appropriate lifecycle event, facilitating the registration of the
-     * command's logic and metadata (description and aliases).
+     * integrated into the command framework. If a command with the same name
+     * already exists, the old command will be replaced with the new one.
+     *
+     * <p><b>Note:</b> For commands to be properly registered with Brigadier, this method
+     * must be called during plugin initialization (before server fully starts).
+     * However, the command logic can be updated at any time by calling this method
+     * again with a new CommandEntity instance.</p>
      *
      * @param command the {@code CommandEntity} object representing the command to
      *                be registered, including its structure, behavior, and metadata
      */
     public void register(CommandEntity command) {
+        String commandName = command.getName().toLowerCase();
+
+        CommandEntity oldCommand = registeredCommands.put(commandName, command);
+
+        if (!lifecycleRegistered) {
+            registerLifecycleHandler();
+        }
+    }
+
+    /**
+     * Registers the lifecycle event handler that will register all pending commands
+     * with Paper's Brigadier system.
+     */
+    private void registerLifecycleHandler() {
+        if (lifecycleRegistered) return;
+        lifecycleRegistered = true;
+
         LifecycleEventManager<Plugin> manager = plugin.getLifecycleManager();
         manager.registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             Commands commands = event.registrar();
-            LiteralArgumentBuilder<CommandSourceStack> builder = buildCommand(command);
-            commands.register(builder.build(), command.getDescription(), command.getAliases());
+
+            for (CommandEntity cmd : registeredCommands.values()) {
+                LiteralArgumentBuilder<CommandSourceStack> builder = buildCommand(cmd);
+                commands.register(builder.build(), cmd.getDescription(), cmd.getAliases());
+            }
         });
+    }
+
+    /**
+     * Checks if a command with the given name is already registered.
+     *
+     * @param commandName the name of the command to check
+     * @return true if a command with that name exists, false otherwise
+     */
+    public boolean isRegistered(String commandName) {
+        return registeredCommands.containsKey(commandName.toLowerCase());
+    }
+
+    /**
+     * Gets a registered command by name.
+     *
+     * @param commandName the name of the command
+     * @return the CommandEntity, or null if not found
+     */
+    public CommandEntity getCommand(String commandName) {
+        return registeredCommands.get(commandName.toLowerCase());
+    }
+
+    /**
+     * Gets all registered command names.
+     *
+     * @return an unmodifiable set of command names
+     */
+    public Set<String> getRegisteredCommandNames() {
+        return Collections.unmodifiableSet(registeredCommands.keySet());
     }
 
     /**
@@ -84,23 +146,34 @@ public class CommandRegistry {
      * and its argument chain. Additionally, it defines the execution logic associated with
      * the command.
      *
+     * <p>The execution logic uses a lookup to the {@link #registeredCommands} map,
+     * allowing command implementations to be updated at runtime.</p>
+     *
      * @param command the {@code CommandEntity} representing the command to be built, including
      *                its name, subcommands, arguments, and associated behavior
      * @return a {@code LiteralArgumentBuilder<CommandSourceStack>} that encapsulates the
      *         structure and logic of the command
      */
     private LiteralArgumentBuilder<CommandSourceStack> buildCommand(CommandEntity command) {
+        String commandName = command.getName().toLowerCase();
         LiteralArgumentBuilder<CommandSourceStack> builder = LiteralArgumentBuilder.literal(command.getName());
 
         for (SubCommand subCommand : command.getSubcommands().values()) {
-            builder.then(buildSubCommand(subCommand, command));
+            builder.then(buildSubCommand(subCommand, commandName));
         }
 
         if (!command.getArguments().isEmpty()) {
-            builder.then(buildArgumentChain(command.getArguments().values().iterator(), command, null));
+            builder.then(buildArgumentChain(command.getArguments().values().iterator(), commandName, null));
         }
 
-        builder.executes(ctx -> executeCommand(ctx, command, null, Collections.emptyMap()));
+        builder.executes(ctx -> {
+            CommandEntity currentCommand = registeredCommands.get(commandName);
+            if (currentCommand == null) {
+                plugin.getLogger().warning("[CommandsAPI] Command '/" + commandName + "' not found in registry!");
+                return 0;
+            }
+            return executeCommand(ctx, currentCommand, null, Collections.emptyMap());
+        });
 
         return builder;
     }
@@ -111,45 +184,40 @@ public class CommandRegistry {
      *
      * @param subCommand the {@code SubCommand} representing the subcommand to be built,
      *                   including its name, subcommands, arguments, and associated behavior
-     * @param rootCommand the root {@code CommandEntity} associated with the current command
-     *                    hierarchy for managing execution and context
+     * @param rootCommandName the name of the root command for looking up in the registry
      * @return a {@code LiteralArgumentBuilder<CommandSourceStack>} that encapsulates the
      *         structure and execution logic of the specified subcommand
      */
-    private LiteralArgumentBuilder<CommandSourceStack> buildSubCommand(SubCommand subCommand, CommandEntity rootCommand) {
+    private LiteralArgumentBuilder<CommandSourceStack> buildSubCommand(SubCommand subCommand, String rootCommandName) {
+        String subCommandName = subCommand.getName().toLowerCase();
         LiteralArgumentBuilder<CommandSourceStack> subBuilder = LiteralArgumentBuilder.literal(subCommand.getName());
 
         for (SubCommand nested : subCommand.getSubcommands().values()) {
-            subBuilder.then(buildSubCommand(nested, rootCommand));
+            subBuilder.then(buildSubCommand(nested, rootCommandName));
         }
 
         if (!subCommand.getArguments().isEmpty()) {
-            subBuilder.then(buildArgumentChain(subCommand.getArguments().values().iterator(), rootCommand, subCommand));
+            subBuilder.then(buildArgumentChain(subCommand.getArguments().values().iterator(), rootCommandName, subCommandName));
         }
 
-        subBuilder.executes(ctx -> executeCommand(ctx, rootCommand, subCommand, Collections.emptyMap()));
+        subBuilder.executes(ctx -> {
+            CommandEntity currentCommand = registeredCommands.get(rootCommandName);
+            if (currentCommand == null) return 0;
+            SubCommand currentSub = currentCommand.getSubcommand(subCommandName);
+            return executeCommand(ctx, currentCommand, currentSub, Collections.emptyMap());
+        });
 
         return subBuilder;
     }
 
     /**
      * Constructs a chain of argument nodes for a command based on the provided iterator
-     * of arguments, root command, and subcommand. This method recursively processes
-     * the arguments, building an argument chain with execution logic for the command.
-     *
-     * @param iterator an iterator of {@code Argument} objects representing the chain of
-     *                 arguments to be parsed and converted into command argument nodes
-     * @param rootCommand the root {@code CommandEntity} associated with the current command
-     *                    hierarchy, serving as the main entry point for execution
-     * @param subCommand an optional {@code SubCommand} associated with the current context,
-     *                   used to handle subcommand-specific argument chaining and execution
-     * @return a {@code CommandNode<CommandSourceStack>} representing the root node of the
-     *         constructed argument chain, or {@code null} if there are no more arguments
+     * of arguments, root command, and subcommand.
      */
     private CommandNode<CommandSourceStack> buildArgumentChain(
             Iterator<Argument> iterator,
-            CommandEntity rootCommand,
-            SubCommand subCommand
+            String rootCommandName,
+            String subCommandName
     ) {
         if (!iterator.hasNext()) {
             return null;
@@ -159,15 +227,21 @@ public class CommandRegistry {
         RequiredArgumentBuilder<CommandSourceStack, ?> argBuilder = createArgumentBuilder(arg);
 
         if (iterator.hasNext()) {
-            CommandNode<CommandSourceStack> next = buildArgumentChain(iterator, rootCommand, subCommand);
+            CommandNode<CommandSourceStack> next = buildArgumentChain(iterator, rootCommandName, subCommandName);
             if (next != null) {
                 argBuilder.then(next);
             }
         }
 
         argBuilder.executes(ctx -> {
-            Map<String, Object> parsedArgs = extractArguments(ctx, subCommand != null ? subCommand : rootCommand);
-            return executeCommand(ctx, rootCommand, subCommand, parsedArgs);
+            CommandEntity currentCommand = registeredCommands.get(rootCommandName);
+            if (currentCommand == null) return 0;
+
+            SubCommand currentSub = subCommandName != null ? currentCommand.getSubcommand(subCommandName) : null;
+            Object target = currentSub != null ? currentSub : currentCommand;
+
+            Map<String, Object> parsedArgs = extractArguments(ctx, target);
+            return executeCommand(ctx, currentCommand, currentSub, parsedArgs);
         });
 
         return argBuilder.build();
