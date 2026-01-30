@@ -34,6 +34,7 @@ public abstract class CommandEntity {
 
     protected CommandSender sender;
     protected String[] args;
+    protected SubCommand executedSubCommand;
 
     /**
      * Constructs a CommandEntity with a specified name, while using default values
@@ -124,6 +125,30 @@ public abstract class CommandEntity {
     public void setExecutionContext(CommandSender sender, String[] args) {
         this.sender = sender;
         this.args = args;
+    }
+
+    /**
+     * Sets the subcommand that was executed.
+     * This method is used internally by the command registry to track which subcommand
+     * was invoked, allowing the parent command's run() method to determine the appropriate
+     * logic to execute.
+     *
+     * @param subCommand The subcommand that was executed, or null if the main command was executed.
+     */
+    public void setExecutedSubCommand(SubCommand subCommand) {
+        this.executedSubCommand = subCommand;
+    }
+
+    /**
+     * Gets the subcommand that was executed.
+     * This method allows the command's run() method to identify which subcommand was invoked
+     * and execute the appropriate logic based on the subcommand's name.
+     *
+     * @return The subcommand that was executed, or null if the main command was executed
+     *         without any subcommand.
+     */
+    public SubCommand getExecutedSubCommand() {
+        return executedSubCommand;
     }
 
     /**

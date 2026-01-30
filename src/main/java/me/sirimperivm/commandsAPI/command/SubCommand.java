@@ -9,22 +9,21 @@ import java.util.*;
 /**
  * Represents a subcommand in a command hierarchy.
  *
- * This abstract class provides a framework for defining and managing subcommands.
- * Subcommands can have their own name, permission, description, aliases, and execution context.
+ * This class provides a framework for defining and managing subcommands.
+ * Subcommands can have their own name, permission, description, and execution context.
  * Additionally, subcommands can have nested subcommands and required arguments.
  *
- * Subclasses are required to implement the {@code run} method, which encapsulates
- * the logic executed when the subcommand is called.
+ * The execution logic for subcommands is handled in the parent command's {@code run} method,
+ * which can identify which subcommand was executed using {@code getExecutedSubCommand()}.
  *
  * Features include:
  * - Support for hierarchical subcommands.
  * - Permission-based execution.
- * - Alias matching for command names.
  * - Execution type validation (e.g., player, console, or both).
  * - Mechanisms to register subcommands and arguments.
  */
 @Getter
-public abstract class SubCommand {
+public class SubCommand {
 
     private final String name, permission, description;
     private final ExecutorType executorType;
@@ -38,13 +37,13 @@ public abstract class SubCommand {
      * Constructs a new SubCommand with the specified name.
      *
      * This constructor initializes a SubCommand with only the name specified.
-     * Other properties, such as permission, description, aliases, and executor type,
+     * Other properties, such as permission, description, and executor type,
      * are assigned default values. The executor type defaults to {@code ExecutorType.BOTH}.
      *
      * @param name the name of the subcommand. This is used to identify the subcommand
      *             and must be unique within the context of its parent command.
      */
-    protected SubCommand(String name) {
+    public SubCommand(String name) {
         this(name, null, null, ExecutorType.BOTH);
     }
 
@@ -52,16 +51,16 @@ public abstract class SubCommand {
      * Constructs a new SubCommand with the specified name and permission.
      *
      * This constructor initializes a SubCommand with a name and a required permission.
-     * Other properties, such as description, aliases, and executor type, are assigned
-     * default values. Specifically, the description is set to {@code null}, aliases
-     * are initialized as an empty list, and the executor type defaults to {@code ExecutorType.BOTH}.
+     * Other properties, such as description and executor type, are assigned
+     * default values. Specifically, the description is set to {@code null}
+     * and the executor type defaults to {@code ExecutorType.BOTH}.
      *
      * @param name       the name of the subcommand. This name is used to identify the subcommand
      *                   and must be unique within the context of its parent command.
      * @param permission the permission string required to execute the subcommand. This is used
      *                   to restrict access to users with the appropriate permissions.
      */
-    protected SubCommand(String name, String permission) {
+    public SubCommand(String name, String permission) {
         this(name, permission, null, ExecutorType.BOTH);
     }
 
@@ -69,9 +68,7 @@ public abstract class SubCommand {
      * Constructs a new SubCommand with the specified name, permission, and description.
      *
      * This constructor initializes a SubCommand with a name, a required permission, and
-     * a brief description. Other properties, such as aliases and executor type, are
-     * assigned default values. The aliases default to an empty list, and the executor
-     * type defaults to {@code ExecutorType.BOTH}.
+     * a brief description. The executor type defaults to {@code ExecutorType.BOTH}.
      *
      * @param name        the name of the subcommand. This name is used to identify the
      *                    subcommand and must be unique within the context of its parent command.
@@ -80,17 +77,15 @@ public abstract class SubCommand {
      * @param description a brief description of the subcommand. This provides additional clarity
      *                    about the subcommand's purpose or functionality.
      */
-    protected SubCommand(String name, String permission, String description) {
+    public SubCommand(String name, String permission, String description) {
         this(name, permission, description, ExecutorType.BOTH);
     }
 
     /**
      * Constructs a new SubCommand with the specified name, permission, description,
-     * aliases, and executor type.
+     * and executor type.
      *
      * This constructor initializes a SubCommand with all major properties explicitly provided.
-     * The aliases list is deep-copied to ensure the immutability of the passed list.
-     * If the aliases list is {@code null}, it is initialized to an empty list.
      * The executor type defaults to {@code ExecutorType.BOTH} if {@code null} is provided.
      *
      * @param name         the name of the subcommand. This name is used to identify the
@@ -103,7 +98,7 @@ public abstract class SubCommand {
      *                     the default value {@code ExecutorType.BOTH} is used, allowing both players
      *                     and the console to execute the subcommand.
      */
-    protected SubCommand(String name, String permission, String description, ExecutorType executorType) {
+    public SubCommand(String name, String permission, String description, ExecutorType executorType) {
         this.name = name;
         this.permission = permission;
         this.description = description;
@@ -111,19 +106,10 @@ public abstract class SubCommand {
     }
 
     /**
-     * Executes the specific functionality of the subcommand.
-     *
-     * This method serves as the entry point for the execution logic of the subcommand.
-     * It needs to be implemented by concrete subclasses to define the specific actions
-     * to be performed when the subcommand is invoked.
-     */
-    public abstract void run();
-
-    /**
      * Sets the execution context for the subcommand, including the command sender
      * and the arguments provided.
      *
-     * This method is typically called before the subcommand's execution logic is
+     * This method is typically called before the parent command's execution logic is
      * invoked, allowing the necessary runtime context (such as who triggered the
      * command and any parameters passed with it) to be set.
      *

@@ -371,13 +371,12 @@ public class CommandRegistry {
                 }
             }
 
+            command.setExecutionContext(sender, new String[0]);
+            command.setExecutedSubCommand(subCommand);
             if (subCommand != null) {
                 subCommand.setExecutionContext(sender, new String[0]);
-                subCommand.run();
-            } else {
-                command.setExecutionContext(sender, new String[0]);
-                command.run();
             }
+            command.run();
             return 1;
         } catch (CommandException e) {
             if (exceptionHandler != null) {

@@ -134,35 +134,74 @@ The base class for creating commands. Extend this class to define your own comma
 ### SubCommand
 
 Subcommands allow you to split command functionality into logical parts.
+
+**Important:** All subcommand logic is handled in the parent command's `run()` method. Use `getExecutedSubCommand()` to identify which subcommand was invoked and handle it accordingly.
+
+#### Basic SubCommand Example
+
 ```java
 public class PointsCommand extends CommandEntity {
     public PointsCommand() {
         super("points", "myplugin.points");
 
         // Register subcommand: /points add <player> <amount>
-        registerSubCommand(new SubCommand("add", "myplugin.points.add", "Add points to a player") {
-            {
-                registerArgument(Argument.builder("player").type(ArgType.STRING).build());
-                registerArgument(Argument.builder("amount").type(ArgType.INTEGER).min(1).build());
-            }
+        SubCommand addSubCommand = new SubCommand("add", "myplugin.points.add", "Add points to a player");
+        addSubCommand.registerArgument(Argument.builder("player").type(ArgType.PLAYER).build());
+        addSubCommand.registerArgument(Argument.builder("amount").type(ArgType.INTEGER).min(1).build());
+        registerSubCommand(addSubCommand);
 
-            @Override
-            public void run() {
-                String playerName = getArgument("player").getAsString();
-                Integer amount = getArgument("amount").getAsInt();
-
-                // Your logic here
-                sender.sendMessage("Added " + amount + " points to " + playerName);
-            }
-        });
+        // Register subcommand: /points remove <player> <amount>
+        SubCommand removeSubCommand = new SubCommand("remove", "myplugin.points.remove", "Remove points from a player");
+        removeSubCommand.registerArgument(Argument.builder("player").type(ArgType.PLAYER).build());
+        removeSubCommand.registerArgument(Argument.builder("amount").type(ArgType.INTEGER).min(1).build());
+        registerSubCommand(removeSubCommand);
     }
 
     @Override
     public void run() {
-        sender.sendMessage("Usage: /points add <player> <amount>");
+        SubCommand subCommand = getExecutedSubCommand();
+
+        if (subCommand == null) {
+            sender.sendMessage("Usage: /points <add|remove> <player> <amount>");
+            return;
+        }
+
+        switch (subCommand.getName()) {
+            case "add" -> {
+                Player target = subCommand.getArgument("player").getAsPlayer();
+                Integer amount = subCommand.getArgument("amount").getAsInt();
+
+                if (target == null) {
+                    sender.sendMessage("§cPlayer not found!");
+                    return;
+                }
+
+                // Your logic here
+                sender.sendMessage("§aAdded " + amount + " points to " + target.getName());
+            }
+            case "remove" -> {
+                Player target = subCommand.getArgument("player").getAsPlayer();
+                Integer amount = subCommand.getArgument("amount").getAsInt();
+
+                if (target == null) {
+                    sender.sendMessage("§cPlayer not found!");
+                    return;
+                }
+
+                // Your logic here
+                sender.sendMessage("§cRemoved " + amount + " points from " + target.getName());
+            }
+        }
     }
 }
 ```
+
+#### Key Points
+
+- **No separate `run()` method**: SubCommands no longer have their own `run()` method. All logic is centralized in the parent command.
+- **Identify subcommands**: Use `getExecutedSubCommand()` in your main `run()` method to check which subcommand was executed.
+- **Access arguments**: Get arguments from the subcommand using `subCommand.getArgument("name")`.
+- **Null check**: If `getExecutedSubCommand()` returns `null`, the main command was executed without any subcommand.
 
 #### Nested SubCommands
 
@@ -174,64 +213,72 @@ public class AdminCommand extends CommandEntity {
     public AdminCommand() {
         super("admin", "myplugin.admin", "Administration commands");
 
-        registerSubCommand(new SubCommand("user", "myplugin.admin.user", "User management") {
-            {
-                // /admin user ban <player> <reason>
-                registerSubCommand(new SubCommand("ban", "myplugin.admin.user.ban", "Ban a player") {
-                    {
-                        registerArgument(Argument.builder("player").type(ArgType.STRING).build());
-                        registerArgument(Argument.builder("reason").type(ArgType.STRING).greedy(true).build());
-                    }
+        // Create user management subcommand
+        SubCommand userSubCommand = new SubCommand("user", "myplugin.admin.user", "User management");
 
-                    @Override
-                    public void run() {
-                        String playerName = getArgument("player").getAsString();
-                        String reason = getArgument("reason").getAsString();
+        // /admin user ban <player> <reason>
+        SubCommand banSubCommand = new SubCommand("ban", "myplugin.admin.user.ban", "Ban a player");
+        banSubCommand.registerArgument(Argument.builder("player").type(ArgType.PLAYER).build());
+        banSubCommand.registerArgument(Argument.builder("reason").type(ArgType.STRING).greedy(true).build());
+        userSubCommand.registerSubCommand(banSubCommand);
 
-                        // Ban logic here
-                        sender.sendMessage("§cBanned §e" + playerName + " §cfor: §7" + reason);
-                    }
-                });
+        // /admin user kick <player>
+        SubCommand kickSubCommand = new SubCommand("kick", "myplugin.admin.user.kick", "Kick a player");
+        kickSubCommand.registerArgument(Argument.builder("player").type(ArgType.PLAYER).build());
+        userSubCommand.registerSubCommand(kickSubCommand);
 
-                // /admin user kick <player>
-                registerSubCommand(new SubCommand("kick", "myplugin.admin.user.kick", "Kick a player") {
-                    {
-                        registerArgument(Argument.builder("player").type(ArgType.STRING).build());
-                    }
-
-                    @Override
-                    public void run() {
-                        String playerName = getArgument("player").getAsString();
-
-                        // Kick logic here
-                        sender.sendMessage("§cKicked §e" + playerName);
-                    }
-                });
-            }
-
-            @Override
-            public void run() {
-                sender.sendMessage("§6=== User Management ===");
-                sender.sendMessage("§e/admin user ban <player> <reason>");
-                sender.sendMessage("§e/admin user kick <player>");
-            }
-        });
+        registerSubCommand(userSubCommand);
 
         // /admin reload
-        registerSubCommand(new SubCommand("reload", "myplugin.admin.reload", "Reload configuration", null, ExecutorType.CONSOLE) {
-            @Override
-            public void run() {
-                // Reload logic here
-                sender.sendMessage("§aConfiguration reloaded!");
-            }
-        });
+        SubCommand reloadSubCommand = new SubCommand("reload", "myplugin.admin.reload", "Reload configuration", ExecutorType.CONSOLE);
+        registerSubCommand(reloadSubCommand);
     }
 
     @Override
     public void run() {
-        sender.sendMessage("§6=== Admin Commands ===");
-        sender.sendMessage("§e/admin user §7- User management");
-        sender.sendMessage("§e/admin reload §7- Reload configuration (console only)");
+        SubCommand subCommand = getExecutedSubCommand();
+
+        if (subCommand == null) {
+            sender.sendMessage("§6=== Admin Commands ===");
+            sender.sendMessage("§e/admin user §7- User management");
+            sender.sendMessage("§e/admin reload §7- Reload configuration (console only)");
+            return;
+        }
+
+        switch (subCommand.getName()) {
+            case "user" -> {
+                sender.sendMessage("§6=== User Management ===");
+                sender.sendMessage("§e/admin user ban <player> <reason>");
+                sender.sendMessage("§e/admin user kick <player>");
+            }
+            case "ban" -> {
+                Player target = subCommand.getArgument("player").getAsPlayer();
+                String reason = subCommand.getArgument("reason").getAsString();
+
+                if (target == null) {
+                    sender.sendMessage("§cPlayer not found!");
+                    return;
+                }
+
+                // Ban logic here
+                sender.sendMessage("§cBanned §e" + target.getName() + " §cfor: §7" + reason);
+            }
+            case "kick" -> {
+                Player target = subCommand.getArgument("player").getAsPlayer();
+
+                if (target == null) {
+                    sender.sendMessage("§cPlayer not found!");
+                    return;
+                }
+
+                // Kick logic here
+                sender.sendMessage("§cKicked §e" + target.getName());
+            }
+            case "reload" -> {
+                // Reload logic here
+                sender.sendMessage("§aConfiguration reloaded!");
+            }
+        }
     }
 }
 ```
@@ -284,10 +331,74 @@ Controls who can execute a command or subcommand.
 | `BOTH`    | Both players and console can execute (default) |
 | `PLAYER`  | Only in-game players can execute               |
 | `CONSOLE` | Only the server console can execute            |
+
+#### Examples
 ```java
-// Player-only command super("fly", "myplugin.fly", "Toggle flight mode", null, ExecutorType.PLAYER);
-// Console-only subcommand registerSubCommand(new SubCommand("reload", "myplugin.reload", "Reload configuration", null, ExecutorType.CONSOLE) { @Override public void run() { // Reload logic } });
+// Player-only command
+public class FlyCommand extends CommandEntity {
+    public FlyCommand() {
+        super("fly", "myplugin.fly", "Toggle flight mode", null, ExecutorType.PLAYER);
+    }
+
+    @Override
+    public void run() {
+        Player player = (Player) sender;
+        player.setAllowFlight(!player.getAllowFlight());
+        player.sendMessage("§aFlight " + (player.getAllowFlight() ? "enabled" : "disabled"));
+    }
+}
+
+// Console-only subcommand
+SubCommand reloadSubCommand = new SubCommand("reload", "myplugin.reload", "Reload configuration", ExecutorType.CONSOLE);
+registerSubCommand(reloadSubCommand);
 ```
+
+---
+
+## 🔄 Migration Guide
+
+If you're upgrading from a previous version where SubCommands had their own `run()` method, here's how to migrate:
+
+### Before (Old API)
+```java
+registerSubCommand(new SubCommand("add", "myplugin.points.add") {
+    {
+        registerArgument(Argument.builder("player").type(ArgType.PLAYER).build());
+        registerArgument(Argument.builder("amount").type(ArgType.INTEGER).build());
+    }
+
+    @Override
+    public void run() {
+        Player target = getArgument("player").getAsPlayer();
+        Integer amount = getArgument("amount").getAsInt();
+        // Logic here
+    }
+});
+```
+
+### After (New API)
+```java
+SubCommand addSubCommand = new SubCommand("add", "myplugin.points.add");
+addSubCommand.registerArgument(Argument.builder("player").type(ArgType.PLAYER).build());
+addSubCommand.registerArgument(Argument.builder("amount").type(ArgType.INTEGER).build());
+registerSubCommand(addSubCommand);
+
+@Override
+public void run() {
+    SubCommand subCommand = getExecutedSubCommand();
+    if (subCommand != null && subCommand.getName().equals("add")) {
+        Player target = subCommand.getArgument("player").getAsPlayer();
+        Integer amount = subCommand.getArgument("amount").getAsInt();
+        // Logic here
+    }
+}
+```
+
+**Benefits of the new approach:**
+- Centralized logic in one place
+- Easier to share code between subcommands
+- Better overview of all command behavior
+- Simplified debugging and maintenance
 
 ---
 
