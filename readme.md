@@ -202,6 +202,9 @@ public class PointsCommand extends CommandEntity {
 - **Identify subcommands**: Use `getExecutedSubCommand()` in your main `run()` method to check which subcommand was executed.
 - **Access arguments**: Get arguments from the subcommand using `subCommand.getArgument("name")`.
 - **Null check**: If `getExecutedSubCommand()` returns `null`, the main command was executed without any subcommand.
+- **Nested subcommands**: For nested subcommands (e.g., `/admin user ban`):
+  - `getExecutedSubCommand()` returns **only the last subcommand** in the chain (e.g., `"ban"`)
+  - `getSubCommandChain()` returns **the full chain** of subcommands (e.g., `[user, ban]`)
 
 #### Nested SubCommands
 

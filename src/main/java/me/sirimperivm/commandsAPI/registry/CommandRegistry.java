@@ -159,7 +159,7 @@ public class CommandRegistry {
         LiteralArgumentBuilder<CommandSourceStack> builder = LiteralArgumentBuilder.literal(command.getName());
 
         for (SubCommand subCommand : command.getSubcommands().values()) {
-            builder.then(buildSubCommand(subCommand, commandName));
+            builder.then(buildSubCommand(subCommand, commandName, new ArrayList<>()));
         }
 
         if (!command.getArguments().isEmpty()) {
@@ -172,7 +172,7 @@ public class CommandRegistry {
                 plugin.getLogger().warning("[CommandsAPI] Command '/" + commandName + "' not found in registry!");
                 return 0;
             }
-            return executeCommand(ctx, currentCommand, null, Collections.emptyMap());
+            return executeCommand(ctx, currentCommand, null, Collections.emptyList(), Collections.emptyMap());
         });
 
         return builder;
@@ -185,39 +185,66 @@ public class CommandRegistry {
      * @param subCommand the {@code SubCommand} representing the subcommand to be built,
      *                   including its name, subcommands, arguments, and associated behavior
      * @param rootCommandName the name of the root command for looking up in the registry
+     * @param parentChain the chain of parent subcommands leading to this subcommand
      * @return a {@code LiteralArgumentBuilder<CommandSourceStack>} that encapsulates the
      *         structure and execution logic of the specified subcommand
      */
-    private LiteralArgumentBuilder<CommandSourceStack> buildSubCommand(SubCommand subCommand, String rootCommandName) {
+    private LiteralArgumentBuilder<CommandSourceStack> buildSubCommand(SubCommand subCommand, String rootCommandName, List<SubCommand> parentChain) {
         String subCommandName = subCommand.getName().toLowerCase();
         LiteralArgumentBuilder<CommandSourceStack> subBuilder = LiteralArgumentBuilder.literal(subCommand.getName());
 
+        // Create the current chain including this subcommand
+        List<SubCommand> currentChain = new ArrayList<>(parentChain);
+        currentChain.add(subCommand);
+
         for (SubCommand nested : subCommand.getSubcommands().values()) {
-            subBuilder.then(buildSubCommand(nested, rootCommandName));
+            subBuilder.then(buildSubCommand(nested, rootCommandName, currentChain));
         }
 
         if (!subCommand.getArguments().isEmpty()) {
-            subBuilder.then(buildArgumentChain(subCommand.getArguments().values().iterator(), rootCommandName, subCommandName));
+            subBuilder.then(buildArgumentChain(subCommand.getArguments().values().iterator(), rootCommandName, currentChain));
         }
 
         subBuilder.executes(ctx -> {
             CommandEntity currentCommand = registeredCommands.get(rootCommandName);
             if (currentCommand == null) return 0;
-            SubCommand currentSub = currentCommand.getSubcommand(subCommandName);
-            return executeCommand(ctx, currentCommand, currentSub, Collections.emptyMap());
+
+            // Resolve the actual subcommand from the chain
+            SubCommand resolvedSub = resolveSubCommandFromChain(currentCommand, currentChain);
+            return executeCommand(ctx, currentCommand, resolvedSub, currentChain, Collections.emptyMap());
         });
 
         return subBuilder;
     }
 
     /**
+     * Resolves a subcommand from the chain by navigating through nested subcommands.
+     *
+     * @param command The root command entity
+     * @param chain The chain of subcommands to resolve
+     * @return The resolved subcommand, or null if not found
+     */
+    private SubCommand resolveSubCommandFromChain(CommandEntity command, List<SubCommand> chain) {
+        if (chain == null || chain.isEmpty()) {
+            return null;
+        }
+
+        SubCommand current = command.getSubcommand(chain.get(0).getName());
+        for (int i = 1; i < chain.size() && current != null; i++) {
+            current = current.getSubcommand(chain.get(i).getName());
+        }
+
+        return current;
+    }
+
+    /**
      * Constructs a chain of argument nodes for a command based on the provided iterator
-     * of arguments, root command, and subcommand.
+     * of arguments, root command, and subcommand chain.
      */
     private CommandNode<CommandSourceStack> buildArgumentChain(
             Iterator<Argument> iterator,
             String rootCommandName,
-            String subCommandName
+            List<SubCommand> subCommandChain
     ) {
         if (!iterator.hasNext()) {
             return null;
@@ -227,7 +254,7 @@ public class CommandRegistry {
         RequiredArgumentBuilder<CommandSourceStack, ?> argBuilder = createArgumentBuilder(arg);
 
         if (iterator.hasNext()) {
-            CommandNode<CommandSourceStack> next = buildArgumentChain(iterator, rootCommandName, subCommandName);
+            CommandNode<CommandSourceStack> next = buildArgumentChain(iterator, rootCommandName, subCommandChain);
             if (next != null) {
                 argBuilder.then(next);
             }
@@ -237,11 +264,13 @@ public class CommandRegistry {
             CommandEntity currentCommand = registeredCommands.get(rootCommandName);
             if (currentCommand == null) return 0;
 
-            SubCommand currentSub = subCommandName != null ? currentCommand.getSubcommand(subCommandName) : null;
+            SubCommand currentSub = subCommandChain != null && !subCommandChain.isEmpty()
+                    ? resolveSubCommandFromChain(currentCommand, subCommandChain)
+                    : null;
             Object target = currentSub != null ? currentSub : currentCommand;
 
             Map<String, Object> parsedArgs = extractArguments(ctx, target);
-            return executeCommand(ctx, currentCommand, currentSub, parsedArgs);
+            return executeCommand(ctx, currentCommand, currentSub, subCommandChain, parsedArgs);
         });
 
         return argBuilder.build();
@@ -339,6 +368,7 @@ public class CommandRegistry {
      * @param ctx The {@link CommandContext} providing the source of the command invocation.
      * @param command The primary {@link CommandEntity} that is being executed.
      * @param subCommand The optional {@link SubCommand} to execute; can be null if no specific sub-command is provided.
+     * @param subCommandChain The complete chain of subcommands from root to leaf
      * @param parsedArgs A map of parsed argument keys to their respective values for execution.
      * @return An integer indicating the result code of execution; typically 1 for success and 0 for failure.
      * @throws CommandException If the command encounters an error, such as a missing permission or invalid context.
@@ -347,6 +377,7 @@ public class CommandRegistry {
             CommandContext<CommandSourceStack> ctx,
             CommandEntity command,
             SubCommand subCommand,
+            List<SubCommand> subCommandChain,
             Map<String, Object> parsedArgs
     ) throws CommandException{
         CommandSender sender = ctx.getSource().getSender();
@@ -373,6 +404,7 @@ public class CommandRegistry {
 
             command.setExecutionContext(sender, new String[0]);
             command.setExecutedSubCommand(subCommand);
+            command.setSubCommandChain(subCommandChain != null ? new ArrayList<>(subCommandChain) : Collections.emptyList());
             if (subCommand != null) {
                 subCommand.setExecutionContext(sender, new String[0]);
             }

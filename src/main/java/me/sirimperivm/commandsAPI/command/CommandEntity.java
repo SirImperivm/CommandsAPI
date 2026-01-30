@@ -1,6 +1,7 @@
 package me.sirimperivm.commandsAPI.command;
 
 import lombok.Getter;
+import lombok.Setter;
 import me.sirimperivm.commandsAPI.command.model.ExecutorType;
 import org.bukkit.command.CommandSender;
 
@@ -34,7 +35,36 @@ public abstract class CommandEntity {
 
     protected CommandSender sender;
     protected String[] args;
+    /**
+     * -- GETTER --
+     *  Gets the subcommand that was executed.
+     *  This method allows the command's run() method to identify which subcommand was invoked
+     *  and execute the appropriate logic based on the subcommand's name.
+     *
+     *
+     * -- SETTER --
+     *  Sets the subcommand that was executed.
+     *  This method is used internally by the command registry to track which subcommand
+     *  was invoked, allowing the parent command's run() method to determine the appropriate
+     *  logic to execute.
+     *
+     @return The subcommand that was executed, or null if the main command was executed
+     *         without any subcommand.
+      * @param subCommand The subcommand that was executed, or null if the main command was executed.
+     */
+    @Setter
     protected SubCommand executedSubCommand;
+    /**
+     * -- SETTER --
+     *  Sets the complete chain of subcommands that were executed.
+     *  For nested subcommands (e.g., /admin user ban), this list contains all subcommands
+     *  in order from parent to child: ["user", "ban"].
+     *
+     * @param chain The list of subcommands in execution order, or an empty list if only
+     *              the main command was executed.
+     */
+    @Setter
+    protected List<SubCommand> subCommandChain;
 
     /**
      * Constructs a CommandEntity with a specified name, while using default values
@@ -128,27 +158,15 @@ public abstract class CommandEntity {
     }
 
     /**
-     * Sets the subcommand that was executed.
-     * This method is used internally by the command registry to track which subcommand
-     * was invoked, allowing the parent command's run() method to determine the appropriate
-     * logic to execute.
+     * Gets the complete chain of subcommands that were executed.
+     * For nested subcommands (e.g., /admin user ban), this returns all subcommands
+     * in order: [SubCommand("user"), SubCommand("ban")].
      *
-     * @param subCommand The subcommand that was executed, or null if the main command was executed.
+     * @return An unmodifiable list of executed subcommands in order, or an empty list
+     *         if only the main command was executed.
      */
-    public void setExecutedSubCommand(SubCommand subCommand) {
-        this.executedSubCommand = subCommand;
-    }
-
-    /**
-     * Gets the subcommand that was executed.
-     * This method allows the command's run() method to identify which subcommand was invoked
-     * and execute the appropriate logic based on the subcommand's name.
-     *
-     * @return The subcommand that was executed, or null if the main command was executed
-     *         without any subcommand.
-     */
-    public SubCommand getExecutedSubCommand() {
-        return executedSubCommand;
+    public List<SubCommand> getSubCommandChain() {
+        return subCommandChain != null ? Collections.unmodifiableList(subCommandChain) : Collections.emptyList();
     }
 
     /**
